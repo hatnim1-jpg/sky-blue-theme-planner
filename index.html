@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>✈️ Travel Planner</title>
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+
+<style>
+
+:root{
+--bg1:#d9f0ff;
+--bg2:#f7fcff;
+--card:#ffffff;
+--primary:#4fa9ff;
+--primary2:#82c8ff;
+--primary-dark:#2f89e7;
+--text:#24303a;
+--sub:#6d7f8d;
+--line:#d7ebf8;
+--soft:#eef8ff;
+--soft2:#dff2ff;
+--shadow:0 12px 30px rgba(0,0,0,0.08);
+}
+
+body{
+margin:0;
+font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+background:linear-gradient(180deg,var(--bg1),var(--bg2));
+color:var(--text);
+}
+
+header{
+background:linear-gradient(135deg,#63b8ff,#8ed3ff);
+color:white;
+padding:20px;
+font-size:22px;
+font-weight:700;
+}
+
+.container{
+max-width:800px;
+margin:auto;
+padding:16px;
+}
+
+.card{
+background:var(--card);
+padding:18px;
+border-radius:16px;
+box-shadow:var(--shadow);
+margin-bottom:16px;
+}
+
+input,select{
+width:100%;
+padding:12px;
+border-radius:10px;
+border:1px solid var(--line);
+margin-top:6px;
+}
+
+button{
+background:var(--primary);
+border:none;
+color:white;
+padding:12px;
+border-radius:10px;
+font-weight:600;
+cursor:pointer;
+}
+
+button.secondary{
+background:var(--soft);
+color:var(--primary-dark);
+}
+
+.schedule{
+background:var(--soft);
+padding:12px;
+border-radius:10px;
+margin-top:10px;
+}
+
+#map{
+height:300px;
+border-radius:12px;
+margin-top:10px;
+}
+
+.result{
+margin-top:10px;
+padding:10px;
+background:var(--soft);
+border-radius:10px;
+}
+
+</style>
+</head>
+
+<body>
+
+<header>✈️ Travel Planner</header>
+
+<div class="container">
+
+<div class="card">
+<h3>일정 추가</h3>
+
+<label>Day</label>
+<select id="day">
+<option>Day1</option>
+<option>Day2</option>
+<option>Day3</option>
+<option>Day4</option>
+</select>
+
+<label>시간</label>
+<input id="time" type="time">
+
+<label>장소</label>
+<input id="place">
+
+<label>메모</label>
+<input id="plan">
+
+<label>비용</label>
+<input id="cost" type="number">
+
+<br><br>
+
+<button onclick="addSchedule()">일정 추가</button>
+
+</div>
+
+<div class="card">
+<h3>일정 목록</h3>
+<div id="scheduleList"></div>
+</div>
+
+<div class="card">
+<h3>장소 검색</h3>
+
+<input id="searchInput" placeholder="장소 검색">
+
+<br><br>
+
+<button onclick="search()">검색</button>
+
+<div id="searchResults"></div>
+
+</div>
+
+<div class="card">
+<h3>지도</h3>
+<div id="map"></div>
+</div>
+
+<div class="card">
+<h3>AI 동선 추천</h3>
+<button onclick="optimize()">동선 정리</button>
+<div id="routeResult"></div>
+</div>
+
+<div class="card">
+<h3>총 여행 예산</h3>
+<div id="totalCost">0원</div>
+</div>
+
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script>
+
+let schedules=[]
+let map=L.map('map').setView([36.35,127.38],13)
+
+L.tileLayer(
+'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
+).addTo(map)
+
+function addSchedule(){
+
+let item={
+day:day.value,
+time:time.value,
+place:place.value,
+plan:plan.value,
+cost:Number(cost.value)||0
+}
+
+schedules.push(item)
+
+renderSchedules()
+updateBudget()
+
+}
+
+function renderSchedules(){
+
+scheduleList.innerHTML=""
+
+schedules.forEach((s,i)=>{
+
+scheduleList.innerHTML+=`
+<div class="schedule">
+<b>${s.day}</b> ${s.time}<br>
+📍 ${s.place}<br>
+${s.plan}<br>
+💸 ${s.cost}원
+<br><br>
+<button onclick="openNaver('${s.place}')">네이버 길찾기</button>
+</div>
+`
+
+})
+
+}
+
+function updateBudget(){
+
+let total=0
+
+schedules.forEach(s=>total+=s.cost)
+
+totalCost.innerText=total.toLocaleString()+"원"
+
+}
+
+function openNaver(place){
+
+window.open(
+"https://map.naver.com/p/search/"+encodeURIComponent(place)
+)
+
+}
+
+async function search(){
+
+let q=searchInput.value
+
+let url=`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}`
+
+let res=await fetch(url)
+
+let data=await res.json()
+
+searchResults.innerHTML=""
+
+data.slice(0,5).forEach(d=>{
+
+searchResults.innerHTML+=`
+<div class="result">
+<b>${d.display_name}</b>
+<br><br>
+<button onclick="addPlace('${d.display_name}',${d.lat},${d.lon})">
+일정에 사용
+</button>
+</div>
+`
+
+})
+
+}
+
+function addPlace(name,lat,lon){
+
+place.value=name
+
+L.marker([lat,lon]).addTo(map)
+
+map.setView([lat,lon],15)
+
+}
+
+function optimize(){
+
+if(schedules.length<2){
+routeResult.innerText="일정이 더 필요해!"
+return
+}
+
+let names=schedules.map(s=>s.place)
+
+routeResult.innerText=names.join(" → ")
+
+}
+
+</script>
+
+</body>
+</html>
